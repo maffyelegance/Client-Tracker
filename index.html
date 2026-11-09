@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Client Tracker</title>
+<style>
+:root{--ink:#12263a;--paper:#eef2f6;--card:#fff;--line:#d5dde6;--muted:#5d6d7e;--accent:#0e7c86;--late:#b3261e;--r:10px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+header{background:var(--ink);color:#fff;padding:14px 16px 0}
+.wrap{max-width:900px;margin:0 auto}
+header h1{margin:0 0 10px;font-size:1.3rem;font-weight:600;letter-spacing:.2px}
+nav{display:flex;gap:2px;overflow-x:auto}
+nav button{background:none;border:0;color:#b9c7d6;padding:10px 14px;font:inherit;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+nav button.on{color:#fff;border-color:#4cc3cc}
+main{max-width:900px;margin:0 auto;padding:18px 16px 90px}
+h2{font-size:1.05rem;margin:22px 0 10px}
+.muted{color:var(--muted);margin:2px 0;font-size:.92rem}
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:var(--r);padding:18px;color:var(--muted)}
+.pipe{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.pipe button{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px;text-align:left;cursor:pointer;font:inherit;color:inherit;border-top:4px solid var(--c)}
+.pipe b{display:block;font-size:1.8rem;line-height:1.1}
+.pipe span{font-size:.85rem;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:10px}
+.card h3{margin:0;font-size:1.05rem}
+.top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.pill{color:#fff;background:var(--c);border-radius:99px;padding:2px 10px;font-size:.78rem;white-space:nowrap}
+.meta{display:flex;flex-wrap:wrap;gap:4px 16px;margin:8px 0;font-size:.9rem}
+.meta a{color:var(--accent)}
+.late{color:var(--late);font-weight:600}
+.acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.btn,button.sm{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font:inherit;font-size:.92rem;cursor:pointer;color:var(--ink);display:inline-block}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.del{color:var(--late)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+input,select,textarea{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+select.inl{width:auto}
+label.f{display:block;font-size:.88rem;margin:10px 0 3px;color:var(--muted)}
+.bar{display:flex;gap:8px;margin-bottom:12px}
+.bar input{flex:2}.bar select{flex:1}
+.fab{position:fixed;right:18px;bottom:18px;background:var(--accent);color:#fff;border:0;border-radius:99px;padding:14px 22px;font:inherit;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+dialog{border:0;border-radius:14px;padding:20px;width:min(480px,94vw);max-height:92vh;overflow:auto}
+dialog::backdrop{background:rgba(18,38,58,.55)}
+dialog h2{margin-top:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .h{text-align:center;font-size:.8rem;color:var(--muted)}
+.day{background:var(--card);border:1px solid var(--line);border-radius:8px;min-height:52px;padding:4px;text-align:left;cursor:pointer;font:inherit;color:inherit;position:relative}
+.day.now{border-color:var(--accent);border-width:2px}
+.day.sel{background:var(--ink);color:#fff}
+.day em{position:absolute;right:5px;bottom:4px;background:var(--accent);color:#fff;border-radius:99px;font-size:.72rem;font-style:normal;padding:0 6px}
+.calh{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.note{background:var(--card);border-left:4px solid var(--accent);border-radius:8px;padding:10px 12px;margin-bottom:8px;white-space:pre-wrap}
+.note small{display:block;color:var(--muted);margin-bottom:2px}
+:focus-visible{outline:3px solid #4cc3cc;outline-offset:2px}
+@media(max-width:480px){.two{grid-template-columns:1fr}.day{min-height:44px}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><h1>Client Tracker</h1>
+<nav id="nav"></nav></div></header>
+<main id="app"></main>
+<button class="fab" data-act="new">+ New client</button>
+<dialog id="dlg"></dialog>
+
+<script>
+const STAGES=["Proposal","Presentation","Site Visit","Reservation","DP Stage","Closing"];
+const COLORS=["#6b7a8c","#3b6fb6","#0e7c86","#c27b0e","#8a4fb3","#2e8b57"];
+const PAY=["Bank Fin","In-House","Spot Cash","Deferred"];
+const TABS=[["home","Home"],["clients","Clients"],["log","Log"],["cal","Calendar"]];
+let S={clients:[],notes:[]},view="home",fStage="",q="",cal=new Date(),calSel="",noteFor="";
+try{S=JSON.parse(localStorage.getItem("clientTracker"))||S}catch(e){}
+const save=()=>{try{localStorage.setItem("clientTracker",JSON.stringify(S))}catch(e){}};
+const esc=t=>String(t==null?"":t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const today=()=>ymd(new Date());
+const peso=n=>n?"₱"+Number(n).toLocaleString():"";
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const $=s=>document.querySelector(s);
+const col=s=>COLORS[STAGES.indexOf(s)]||COLORS[0];
+const byId=id=>S.clients.find(c=>c.id===id);
+const nice=d=>d?new Date(d+"T00:00").toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}):"";
+
+function card(x){
+  const late=x.follow&&x.follow<today();
+  return `<article class="card"><div class="top"><div><h3>${esc(x.name)}</h3>
+  <p class="muted">${esc(x.project||"No property yet")} ${x.budget?"&nbsp;"+peso(x.budget):""} ${x.pay?"&nbsp;"+esc(x.pay):""}</p></div>
+  <span class="pill" style="--c:${col(x.stage)}">${esc(x.stage)}</span></div>
+  <div class="meta">${x.phone?`<a href="tel:${esc(x.phone)}">${esc(x.phone)}</a>`:""}${x.email?`<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>`:""}
+  ${x.follow?`<span class="${late?"late":""}">${late?"Overdue: ":"Follow up: "}${nice(x.follow)}</span>`:""}</div>
+  <div class="acts"><select class="inl" data-stage="${x.id}" aria-label="Change status">${STAGES.map(s=>`<option${s===x.stage?" selected":""}>${s}</option>`).join("")}</select>
+  <button class="sm" data-act="edit" data-v="${x.id}">Edit</button><button class="sm" data-act="note" data-v="${x.id}">Add note</button></div></article>`;
+}
+
+function home(){
+  const c=S.clients,lim=new Date();lim.setDate(lim.getDate()+7);
+  const due=c.filter(x=>x.follow&&x.follow<=ymd(lim)&&x.stage!=="Closing").sort((a,b)=>a.follow<b.follow?-1:1);
+  return `<h2 style="margin-top:0">Pipeline</h2><div class="pipe">${STAGES.map(s=>`<button data-act="stage" data-v="${s}" style="--c:${col(s)}"><b>${c.filter(x=>x.stage===s).length}</b><span>${s}</span></button>`).join("")}</div>
+  <h2>Follow-ups in the next 7 days</h2>${due.length?due.map(card).join(""):`<p class="empty">Nothing due. Add a follow-up date to a client and it will show up here.</p>`}
+  <h2>Backup</h2><p class="muted">Your clients are saved in this browser on this device only. Download a backup often, and restore it on another device if needed.</p>
+  <div class="row" style="margin-top:8px"><button class="btn" data-act="exp">Download backup</button><button class="btn" data-act="csv">Export CSV</button><label class="btn">Restore backup<input type="file" id="imp" accept=".json" hidden></label></div>`;
+}
+
+function clientList(){
+  const t=q.toLowerCase();
+  const l=S.clients.filter(x=>(!fStage||x.stage===fStage)&&(!t||[x.name,x.phone,x.email,x.project].join(" ").toLowerCase().includes(t)));
+  return l.length?l.map(card).join(""):`<p class="empty">${S.clients.length?"No clients match your search.":"No clients yet. Tap “+ New client” to add your first one."}</p>`;
+}
+function clients(){
+  return `<div class="bar"><input id="q" type="search" placeholder="Search name, phone, property" value="${esc(q)}" aria-label="Search clients">
+  <select id="fs" aria-label="Filter by status"><option value="">All stages</option>${STAGES.map(s=>`<option${s===fStage?" selected":""}>${s}</option>`).join("")}</select></div><div id="list">${clientList()}</div>`;
+}
+
+function log(){
+  const opts=S.clients.map(c=>`<option value="${c.id}"${c.id===noteFor?" selected":""}>${esc(c.name)}</option>`).join("");
+  return `<form id="nf"><label class="f" for="nc">Client</label><select id="nc" required><option value="">Choose a client</option>${opts}</select>
+  <label class="f" for="nt">Note</label><textarea id="nt" rows="3" required placeholder="What happened? What is the next step?"></textarea>
+  <div class="acts"><button class="btn pri" type="submit">Save note</button></div></form>
+  <h2>Activity</h2>${S.notes.length?S.notes.map(n=>{const c=byId(n.cid);return `<div class="note"><small>${esc(c?c.name:"Deleted client")} on ${nice(n.date)} <button class="sm" data-act="dn" data-v="${n.id}" style="float:right;padding:2px 8px">Delete</button></small>${esc(n.text)}</div>`}).join(""):`<p class="empty">No notes yet. Pick a client above and write your first note.</p>`}`;
+}
+
+function calendar(){
+  const y=cal.getFullYear(),m=cal.getMonth(),first=new Date(y,m,1).getDay(),n=new Date(y,m+1,0).getDate();
+  let cells=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>`<div class="h">${d}</div>`).join("")+"<i></i>".repeat(first);
+  for(let d=1;d<=n;d++){const k=ymd(new Date(y,m,d)),e=S.clients.filter(x=>x.follow===k).length;
+    cells+=`<button class="day${k===today()?" now":""}${k===calSel?" sel":""}" data-act="day" data-v="${k}"><span>${d}</span>${e?`<em>${e}</em>`:""}</button>`}
+  const sel=calSel?S.clients.filter(x=>x.follow===calSel):[];
+  return `<div class="calh"><button class="btn" data-act="prev" aria-label="Previous month">&lt;</button><strong>${cal.toLocaleDateString(undefined,{month:"long",year:"numeric"})}</strong><button class="btn" data-act="next" aria-label="Next month">&gt;</button></div>
+  <div class="cal">${cells}</div>${calSel?`<h2>${nice(calSel)}</h2>${sel.length?sel.map(card).join(""):`<p class="empty">No follow-ups on this day.</p>`}`:`<p class="muted" style="margin-top:12px">Tap a day to see its follow-ups.</p>`}`;
+}
+
+function render(){
+  $("#nav").innerHTML=TABS.map(t=>`<button data-act="tab" data-v="${t[0]}" class="${view===t[0]?"on":""}">${t[1]}</button>`).join("");
+  $("#app").innerHTML={home,clients,log,cal:calendar}[view]();
+}
+
+function form(id){
+  const x=id?byId(id):{stage:STAGES[0]};
+  $("#dlg").innerHTML=`<form id="cf"><h2>${id?"Edit client":"New client"}</h2>
+  <label class="f" for="a1">Name</label><input id="a1" required value="${esc(x.name)}">
+  <div class="two"><div><label class="f" for="a2">Phone</label><input id="a2" type="tel" value="${esc(x.phone)}"></div><div><label class="f" for="a3">Email</label><input id="a3" type="email" value="${esc(x.email)}"></div></div>
+  <label class="f" for="a4">Property or project</label><input id="a4" value="${esc(x.project)}">
+  <div class="two"><div><label class="f" for="a5">Budget (₱)</label><input id="a5" type="number" min="0" value="${esc(x.budget)}"></div>
+  <div><label class="f" for="a6">Payment type</label><select id="a6"><option value="">Not set</option>${PAY.map(p=>`<option${p===x.pay?" selected":""}>${p}</option>`).join("")}</select></div></div>
+  <div class="two"><div><label class="f" for="a7">Status</label><select id="a7">${STAGES.map(s=>`<option${s===x.stage?" selected":""}>${s}</option>`).join("")}</select></div>
+  <div><label class="f" for="a8">Follow-up date</label><input id="a8" type="date" value="${esc(x.follow)}"></div></div>
+  <div class="acts" style="margin-top:16px"><button class="btn pri" type="submit">Save client</button><button class="btn" type="button" data-act="close">Cancel</button>${id?`<button class="btn del" type="button" data-act="del" data-v="${id}">Delete</button>`:""}</div></form>`;
+  $("#cf").onsubmit=e=>{e.preventDefault();
+    const d={name:$("#a1").value.trim(),phone:$("#a2").value.trim(),email:$("#a3").value.trim(),project:$("#a4").value.trim(),budget:$("#a5").value,pay:$("#a6").value,stage:$("#a7").value,follow:$("#a8").value};
+    if(id)Object.assign(byId(id),d);else S.clients.unshift({id:uid(),created:today(),...d});
+    save();$("#dlg").close();render()};
+  $("#dlg").showModal();
+}
+
+function dl(name,type,text){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
+
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]");if(!b)return;
+  const a=b.dataset.act,v=b.dataset.v;
+  if(a==="tab"){view=v;render()}
+  else if(a==="new")form();
+  else if(a==="edit")form(v);
+  else if(a==="close")$("#dlg").close();
+  else if(a==="del"){if(confirm("Delete this client and their notes?")){S.clients=S.clients.filter(c=>c.id!==v);S.notes=S.notes.filter(n=>n.cid!==v);save();$("#dlg").close();render()}}
+  else if(a==="stage"){fStage=v;q="";view="clients";render()}
+  else if(a==="note"){noteFor=v;view="log";render();$("#nt").focus()}
+  else if(a==="dn"){S.notes=S.notes.filter(n=>n.id!==v);save();render()}
+  else if(a==="day"){calSel=v;render()}
+  else if(a==="prev"){cal=new Date(cal.getFullYear(),cal.getMonth()-1,1);render()}
+  else if(a==="next"){cal=new Date(cal.getFullYear(),cal.getMonth()+1,1);render()}
+  else if(a==="exp")dl("client-tracker-backup-"+today()+".json","application/json",JSON.stringify(S));
+  else if(a==="csv"){
+    const h=["Name","Phone","Email","Property","Budget","Payment","Status","Follow-up"];
+    const r=S.clients.map(c=>[c.name,c.phone,c.email,c.project,c.budget,c.pay,c.stage,c.follow].map(v=>'"'+String(v||"").replace(/"/g,'""')+'"').join(","));
+    dl("clients-"+today()+".csv","text/csv",[h.join(",")].concat(r).join("\n"))}
+});
+document.addEventListener("change",e=>{
+  const t=e.target;
+  if(t.dataset.stage){byId(t.dataset.stage).stage=t.value;save();render()}
+  else if(t.id==="fs"){fStage=t.value;$("#list").innerHTML=clientList()}
+  else if(t.id==="imp"&&t.files[0]){const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.clients))throw 0;S={clients:d.clients,notes:d.notes||[]};save();render();alert("Backup restored.")}catch(x){alert("That file is not a valid Client Tracker backup.")}};r.readAsText(t.files[0])}
+});
+document.addEventListener("input",e=>{if(e.target.id==="q"){q=e.target.value;$("#list").innerHTML=clientList()}});
+document.addEventListener("submit",e=>{
+  if(e.target.id==="nf"){e.preventDefault();noteFor=$("#nc").value;S.notes.unshift({id:uid(),cid:noteFor,text:$("#nt").value.trim(),date:today()});save();render()}
+});
+render();
+</script>
+</body>
+</html>
